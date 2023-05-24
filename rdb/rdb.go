@@ -1,4 +1,4 @@
-package postgresql
+package rdb
 
 import (
 	"bytes"

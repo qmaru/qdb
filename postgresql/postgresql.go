@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/qmaru/qdb/rdb"
+
 	_ "github.com/lib/pq"
 )
 
@@ -108,8 +110,8 @@ func (p *PostgreSQL) CreateTable(tables []any) error {
 	for _, table := range tables {
 		var buffer bytes.Buffer
 		rType := reflect.TypeOf(table)
-		rName := DBName(rType.Name())
-		DBFiled(rType, &buffer)
+		rName := rdb.DBName(rType.Name())
+		rdb.DBFiled(rType, &buffer)
 		rFiled := buffer.Bytes()[0 : len(buffer.Bytes())-1]
 		sql := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s)", rName, rFiled)
 		_, err := pdb.Exec(sql)
@@ -130,8 +132,8 @@ func (p *PostgreSQL) Comment(tables []any) error {
 	for _, table := range tables {
 		var buffer bytes.Buffer
 		rType := reflect.TypeOf(table)
-		rName := DBName(rType.Name())
-		DBComment(rType, &buffer)
+		rName := rdb.DBName(rType.Name())
+		rdb.DBComment(rType, &buffer)
 		rFiled := buffer.Bytes()[0 : len(buffer.Bytes())-1]
 
 		commentList := strings.Split(string(rFiled), ",")
@@ -157,8 +159,8 @@ func (p *PostgreSQL) CreateIndex(tables []any) error {
 	for _, table := range tables {
 		var buffer bytes.Buffer
 		rType := reflect.TypeOf(table)
-		rName := DBName(rType.Name())
-		DBIndex(rType, &buffer)
+		rName := rdb.DBName(rType.Name())
+		rdb.DBIndex(rType, &buffer)
 		rFiled := buffer.Bytes()[0 : len(buffer.Bytes())-1]
 
 		indexList := strings.Split(string(rFiled), ",")
