@@ -15,6 +15,13 @@ type Sqlitep struct {
 	FileName string
 }
 
+// NewSqlitep pure-sqlite
+func New(filename string) *Sqlitep {
+	return &Sqlitep{
+		FileName: filename,
+	}
+}
+
 func (s *Sqlitep) Connect() (*sql.DB, error) {
 	db, err := sql.Open("sqlite", s.FileName)
 	if err != nil {

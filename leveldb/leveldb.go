@@ -10,6 +10,12 @@ type LevelDB struct {
 	FileName string
 }
 
+func New(filename string) *LevelDB {
+	return &LevelDB{
+		FileName: filename,
+	}
+}
+
 // Connect create database
 func (ldb *LevelDB) Connect() (*leveldb.DB, error) {
 	db, err := leveldb.OpenFile(ldb.FileName, nil)

@@ -20,6 +20,16 @@ type PostgreSQL struct {
 	DBName   string
 }
 
+func New(host string, port int, username, password, dbname string) *PostgreSQL {
+	return &PostgreSQL{
+		Host:     host,
+		Port:     port,
+		Username: username,
+		Password: password,
+		DBName:   dbname,
+	}
+}
+
 // Connect connecting a database
 func (p *PostgreSQL) Connect() (*sql.DB, error) {
 	dbInfo := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable", p.Username, p.Password, p.Host, p.Port, p.DBName)

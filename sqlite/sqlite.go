@@ -15,6 +15,13 @@ type Sqlite struct {
 	FileName string
 }
 
+// NewSqlite cgo-sqlite
+func New(filename string) *Sqlite {
+	return &Sqlite{
+		FileName: filename,
+	}
+}
+
 func (s *Sqlite) Connect() (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", s.FileName)
 	if err != nil {

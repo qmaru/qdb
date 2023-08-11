@@ -12,6 +12,13 @@ type BoltDB struct {
 	BucketName string
 }
 
+func New(filename, bucketname string) *BoltDB {
+	return &BoltDB{
+		FileName:   filename,
+		BucketName: bucketname,
+	}
+}
+
 // Connect Open and create
 func (b *BoltDB) Connect() (*bolt.DB, error) {
 	db, err := bolt.Open(b.FileName, 0600, nil)
