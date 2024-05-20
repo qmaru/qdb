@@ -86,6 +86,7 @@ func DBComment(reflectType reflect.Type, buffer *bytes.Buffer) {
 //	index type: btree, hash, gist, spgist, gin
 //	eg: json:"id"
 //	eg: index:"btree"
+//	eg: index:"btree|unique"
 func DBIndex(reflectType reflect.Type, buffer *bytes.Buffer) {
 	if reflectType.Kind() != reflect.Struct {
 		return

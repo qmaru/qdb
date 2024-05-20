@@ -178,8 +178,17 @@ func (p *PostgreSQL) CreateIndex(tables []any) error {
 			rIndex := strings.Split(index, ":")
 			rFiled := rIndex[0]
 			rType := rIndex[1]
+			// rType with unique
+			rTypeCheck := strings.Split(rType, "|")
+			var indexTag string
+			var uniqueTag string
+			if len(rTypeCheck) == 2 {
+				uniqueTag = rTypeCheck[1]
+			}
+			indexTag = rTypeCheck[0]
+
 			rIndexName := fmt.Sprintf("%s_%s_idx", rName, rIndex[0])
-			sql := fmt.Sprintf(`CREATE INDEX IF NOT EXISTS %s ON %s USING %s (%s);`, rIndexName, rName, rType, rFiled)
+			sql := fmt.Sprintf(`CREATE %s INDEX IF NOT EXISTS %s ON %s USING %s (%s);`, uniqueTag, rIndexName, rName, indexTag, rFiled)
 			_, err := pdb.Exec(sql)
 			if err != nil {
 				return err
