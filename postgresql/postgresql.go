@@ -191,7 +191,8 @@ func (p *PostgreSQL) CreateIndex(tables []any) error {
 
 			var indexSql string
 			if indexTag == "hnsw" {
-				indexSql = fmt.Sprintf(`CREATE INDEX IF NOT EXISTS %s ON %s USING %s (%s vector_l2_ops);`, rIndexName, rName, indexTag, rFiled)
+				// uniqueTag: vector_l2_ops | vector_ip_ops | vector_cosine_ops | vector_l1_ops | bit_hamming_ops | bit_jaccard_ops
+				indexSql = fmt.Sprintf(`CREATE INDEX IF NOT EXISTS %s ON %s USING %s (%s %s);`, rIndexName, rName, indexTag, rFiled, uniqueTag)
 			} else {
 				indexSql = fmt.Sprintf(`CREATE %s INDEX IF NOT EXISTS %s ON %s USING %s (%s);`, uniqueTag, rIndexName, rName, indexTag, rFiled)
 			}
