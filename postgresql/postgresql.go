@@ -188,8 +188,14 @@ func (p *PostgreSQL) CreateIndex(tables []any) error {
 			indexTag = rTypeCheck[0]
 
 			rIndexName := fmt.Sprintf("%s_%s_idx", rName, rIndex[0])
-			sql := fmt.Sprintf(`CREATE %s INDEX IF NOT EXISTS %s ON %s USING %s (%s);`, uniqueTag, rIndexName, rName, indexTag, rFiled)
-			_, err := pdb.Exec(sql)
+
+			var indexSql string
+			if indexTag == "hnsw" {
+				indexSql = fmt.Sprintf(`CREATE INDEX IF NOT EXISTS %s ON %s USING %s (%s vector_l2_ops);`, rIndexName, rName, indexTag, rFiled)
+			} else {
+				indexSql = fmt.Sprintf(`CREATE %s INDEX IF NOT EXISTS %s ON %s USING %s (%s);`, uniqueTag, rIndexName, rName, indexTag, rFiled)
+			}
+			_, err := pdb.Exec(indexSql)
 			if err != nil {
 				return err
 			}
