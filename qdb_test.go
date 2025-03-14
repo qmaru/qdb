@@ -27,7 +27,7 @@ func TestLevelDB(t *testing.T) {
 }
 
 func TestPostgresql(t *testing.T) {
-	psql := postgresql.New("127.0.0.1", 5432, "qmaru", "123456", "qmaru")
+	psql := postgresql.NewDefault("127.0.0.1", 5432, "qmaru", "123456", "qmaru")
 	err := psql.Ping()
 	if err != nil {
 		t.Fatal(err)
