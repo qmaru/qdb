@@ -5,7 +5,7 @@ go 1.24
 require (
 	github.com/glebarez/go-sqlite v1.22.0
 	github.com/lib/pq v1.10.9
-	github.com/mattn/go-sqlite3 v1.14.24
+	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/syndtr/goleveldb v1.0.0
 	go.etcd.io/bbolt v1.4.0
 )
