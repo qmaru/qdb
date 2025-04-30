@@ -65,25 +65,24 @@ func NewDefault(host string, port int, username, password, dbname string) *Postg
 
 // Connect connecting a database
 func (p *PostgreSQL) Connect() error {
-	if p.db != nil {
-		return nil
+	if p.db == nil {
+		dbInfo := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable", p.Username, p.Password, p.Host, p.Port, p.DBName)
+		db, err := sql.Open("postgres", dbInfo)
+		if err != nil {
+			return fmt.Errorf("could not open database: %v", err)
+		}
+
+		db.SetMaxOpenConns(p.Options.MaxOpenConns)
+		db.SetMaxIdleConns(p.Options.MaxIdleConns)
+		db.SetConnMaxLifetime(time.Duration(p.Options.ConnMaxLifetime) * time.Minute)
+
+		if err := db.Ping(); err != nil {
+			return fmt.Errorf("could not ping database: %v", err)
+		}
+
+		p.db = db
 	}
 
-	dbInfo := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable", p.Username, p.Password, p.Host, p.Port, p.DBName)
-	db, err := sql.Open("postgres", dbInfo)
-	if err != nil {
-		return fmt.Errorf("could not open database: %v", err)
-	}
-
-	db.SetMaxOpenConns(p.Options.MaxOpenConns)
-	db.SetMaxIdleConns(p.Options.MaxIdleConns)
-	db.SetConnMaxLifetime(time.Duration(p.Options.ConnMaxLifetime) * time.Minute)
-
-	if err := db.Ping(); err != nil {
-		return fmt.Errorf("could not ping database: %v", err)
-	}
-
-	p.db = db
 	return nil
 }
 
@@ -98,7 +97,8 @@ func (p *PostgreSQL) Stats() sql.DBStats {
 	return p.db.Stats()
 }
 
-func (p *PostgreSQL) execSQL(sql string, args ...any) (sql.Result, error) {
+// Exec Run a raw sql and return result
+func (p *PostgreSQL) Exec(sql string, args ...any) (sql.Result, error) {
 	if err := p.Connect(); err != nil {
 		return nil, err
 	}
@@ -112,16 +112,12 @@ func (p *PostgreSQL) execSQL(sql string, args ...any) (sql.Result, error) {
 	return stmt.Exec(args...)
 }
 
-// Exec Run a raw sql and return result
-func (p *PostgreSQL) Exec(sql string, args ...any) (sql.Result, error) {
-	return p.execSQL(sql, args...)
-}
-
 // Query Run a raw sql and return some rows
 func (p *PostgreSQL) Query(sql string, args ...any) (*sql.Rows, error) {
 	if err := p.Connect(); err != nil {
 		return nil, err
 	}
+
 	stmt, err := p.db.Prepare(sql)
 	if err != nil {
 		return nil, fmt.Errorf("could not prepare statement: %v", err)
@@ -136,13 +132,7 @@ func (p *PostgreSQL) QueryOne(sql string, args ...any) (*sql.Row, error) {
 	if err := p.Connect(); err != nil {
 		return nil, err
 	}
-
-	stmt, err := p.db.Prepare(sql)
-	if err != nil {
-		return nil, fmt.Errorf("could not prepare statement: %v", err)
-	}
-	defer stmt.Close()
-	return stmt.QueryRow(args...), nil
+	return p.db.QueryRow(sql, args...), nil
 }
 
 // CreateTable create table using model
@@ -164,7 +154,6 @@ func (p *PostgreSQL) CreateTable(tables []any) error {
 		}
 	}
 
-	p.Close()
 	return nil
 }
 
@@ -191,7 +180,7 @@ func (p *PostgreSQL) Comment(tables []any) error {
 			}
 		}
 	}
-	p.Close()
+
 	return nil
 }
 
@@ -237,7 +226,7 @@ func (p *PostgreSQL) CreateIndex(tables []any) error {
 			}
 		}
 	}
-	p.Close()
+
 	return nil
 }
 
@@ -251,5 +240,6 @@ func (p *PostgreSQL) Ping() error {
 	if err != nil {
 		return fmt.Errorf("ping failed: %v", err)
 	}
+
 	return nil
 }
