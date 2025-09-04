@@ -81,6 +81,32 @@ func (s *Sqlitep) QueryOne(sql string, args ...any) (*sql.Row, error) {
 	return row, nil
 }
 
+// Transaction run transaction
+func (s *Sqlitep) Transaction(fn func(tx *sql.Tx) error) error {
+	sdb, err := s.Connect()
+	if err != nil {
+		return err
+	}
+	defer sdb.Close()
+
+	tx, err := sdb.Begin()
+	if err != nil {
+		return err
+	}
+
+	defer func() { _ = tx.Rollback() }()
+
+	if err := fn(tx); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return nil
+}
+
 // CreateTable create table using model
 func (s *Sqlitep) CreateTable(tables []any) error {
 	sdb, err := s.Connect()

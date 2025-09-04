@@ -135,6 +135,26 @@ func (p *PostgreSQL) QueryOne(sql string, args ...any) (*sql.Row, error) {
 	return p.db.QueryRow(sql, args...), nil
 }
 
+// Transaction run transaction
+func (p *PostgreSQL) Transaction(fn func(tx *sql.Tx) error) error {
+	if err := p.Connect(); err != nil {
+		return err
+	}
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	defer func() { _ = tx.Rollback() }()
+
+	if err := tx.Commit(); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	return nil
+}
+
 // CreateTable create table using model
 func (p *PostgreSQL) CreateTable(tables []any) error {
 	if err := p.Connect(); err != nil {
