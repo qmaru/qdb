@@ -13,6 +13,8 @@ import (
 	_ "github.com/lib/pq"
 )
 
+type Tx = *sql.Tx
+
 type PostgreSQLOptions struct {
 	MaxOpenConns    int
 	MaxIdleConns    int
@@ -102,14 +104,7 @@ func (p *PostgreSQL) Exec(sql string, args ...any) (sql.Result, error) {
 	if err := p.Connect(); err != nil {
 		return nil, err
 	}
-
-	stmt, err := p.db.Prepare(sql)
-	if err != nil {
-		return nil, fmt.Errorf("could not prepare statement: %v", err)
-	}
-	defer stmt.Close()
-
-	return stmt.Exec(args...)
+	return p.db.Exec(sql, args...)
 }
 
 // Query Run a raw sql and return some rows
@@ -117,14 +112,7 @@ func (p *PostgreSQL) Query(sql string, args ...any) (*sql.Rows, error) {
 	if err := p.Connect(); err != nil {
 		return nil, err
 	}
-
-	stmt, err := p.db.Prepare(sql)
-	if err != nil {
-		return nil, fmt.Errorf("could not prepare statement: %v", err)
-	}
-	defer stmt.Close()
-
-	return stmt.Query(args...)
+	return p.db.Query(sql, args...)
 }
 
 // QueryOne Run a raw sql and return a row
@@ -136,7 +124,7 @@ func (p *PostgreSQL) QueryOne(sql string, args ...any) (*sql.Row, error) {
 }
 
 // Transaction run transaction
-func (p *PostgreSQL) Transaction(fn func(tx *sql.Tx) error) error {
+func (p *PostgreSQL) Transaction(fn func(tx Tx) error) error {
 	if err := p.Connect(); err != nil {
 		return err
 	}
@@ -146,6 +134,10 @@ func (p *PostgreSQL) Transaction(fn func(tx *sql.Tx) error) error {
 	}
 
 	defer func() { _ = tx.Rollback() }()
+
+	if err := fn(tx); err != nil {
+		return err
+	}
 
 	if err := tx.Commit(); err != nil {
 		_ = tx.Rollback()

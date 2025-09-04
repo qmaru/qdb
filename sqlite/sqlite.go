@@ -11,6 +11,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+type Tx = *sql.Tx
+
 type Sqlite struct {
 	FileName string
 }
@@ -36,16 +38,7 @@ func (s *Sqlite) Exec(raw string, args ...any) (sql.Result, error) {
 		return nil, err
 	}
 	defer sdb.Close()
-	stmt, err := sdb.Prepare(raw)
-	if err != nil {
-		return nil, err
-	}
-	defer stmt.Close()
-	result, err := stmt.Exec(args...)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
+	return sdb.Exec(raw, args...)
 }
 
 func (s *Sqlite) Query(sql string, args ...any) (*sql.Rows, error) {
@@ -54,16 +47,7 @@ func (s *Sqlite) Query(sql string, args ...any) (*sql.Rows, error) {
 		return nil, err
 	}
 	defer sdb.Close()
-	stmt, err := sdb.Prepare(sql)
-	if err != nil {
-		return nil, err
-	}
-	defer stmt.Close()
-	rows, err := stmt.Query(args...)
-	if err != nil {
-		return nil, err
-	}
-	return rows, nil
+	return sdb.Query(sql, args...)
 }
 
 func (s *Sqlite) QueryOne(sql string, args ...any) (*sql.Row, error) {
@@ -72,17 +56,11 @@ func (s *Sqlite) QueryOne(sql string, args ...any) (*sql.Row, error) {
 		return nil, err
 	}
 	defer sdb.Close()
-	stmt, err := sdb.Prepare(sql)
-	if err != nil {
-		return nil, err
-	}
-	defer stmt.Close()
-	row := stmt.QueryRow(args...)
-	return row, nil
+	return sdb.QueryRow(sql, args...), nil
 }
 
 // Transaction run transaction
-func (s *Sqlite) Transaction(fn func(tx *sql.Tx) error) error {
+func (s *Sqlite) Transaction(fn func(tx Tx) error) error {
 	sdb, err := s.Connect()
 	if err != nil {
 		return err
