@@ -32,6 +32,34 @@ func TestPostgresql(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	var version string
+	// normal query
+	row, err := psql.QueryOne("SELECT version()")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = row.Scan(&version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("normal query: %s\n", version)
+
+	// transaction query
+	err = psql.Transaction(func(tx postgresql.Tx) error {
+		row, err := psql.QueryOneWithTx(tx, "SELECT version()")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return row.Scan(&version)
+	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Logf("transaction query: %s\n", version)
 }
 
 func TestSqlite(t *testing.T) {
