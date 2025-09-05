@@ -63,15 +63,29 @@ func TestPostgresql(t *testing.T) {
 }
 
 func TestSqlite(t *testing.T) {
-	sq3 := sqlite.New(":memory:")
-	db, err := sq3.Connect()
+	sql3 := sqlite.New(":memory:")
+	row, err := sql3.QueryOne("select sqlite_version()")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
-	row := db.QueryRow("select sqlite_version()")
 	var result string
-	err = row.Scan(&result)
+	if err := row.Scan(&result); err != nil {
+		t.Fatal(err)
+	}
+	t.Log(result)
+
+	err = sql3.Transaction(func(tx sqlitep.Tx) error {
+		row, err := sql3.QueryOneWithTx(tx, "select sqlite_version()")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var result string
+		if err := row.Scan(&result); err != nil {
+			t.Fatal(err)
+		}
+		return nil
+	})
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,15 +93,29 @@ func TestSqlite(t *testing.T) {
 }
 
 func TestSqlitep(t *testing.T) {
-	sq3p := sqlitep.New(":memory:")
-	db, err := sq3p.Connect()
+	sql3p := sqlitep.New(":memory:")
+	row, err := sql3p.QueryOne("select sqlite_version()")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
-	row := db.QueryRow("select sqlite_version()")
 	var result string
-	err = row.Scan(&result)
+	if err := row.Scan(&result); err != nil {
+		t.Fatal(err)
+	}
+	t.Log(result)
+
+	err = sql3p.Transaction(func(tx sqlitep.Tx) error {
+		row, err := sql3p.QueryOneWithTx(tx, "select sqlite_version()")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var result string
+		if err := row.Scan(&result); err != nil {
+			t.Fatal(err)
+		}
+		return nil
+	})
+
 	if err != nil {
 		t.Fatal(err)
 	}
