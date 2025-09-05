@@ -15,6 +15,12 @@ import (
 
 type Tx = *sql.Tx
 
+type DBExecutor interface {
+	Exec(query string, args ...any) (sql.Result, error)
+	Query(query string, args ...any) (*sql.Rows, error)
+	QueryRow(query string, args ...any) *sql.Row
+}
+
 type PostgreSQLOptions struct {
 	MaxOpenConns    int
 	MaxIdleConns    int
@@ -99,28 +105,57 @@ func (p *PostgreSQL) Stats() sql.DBStats {
 	return p.db.Stats()
 }
 
-// Exec Run a raw sql and return result
-func (p *PostgreSQL) Exec(sql string, args ...any) (sql.Result, error) {
+func (p *PostgreSQL) getExecutor(tx Tx) (DBExecutor, error) {
+	if tx != nil {
+		return tx, nil
+	}
+
 	if err := p.Connect(); err != nil {
 		return nil, err
 	}
-	return p.db.Exec(sql, args...)
+	return p.db, nil
+}
+
+// ExecWithTx Run a raw sql with Tx and return result
+func (p *PostgreSQL) ExecWithTx(tx Tx, sql string, args ...any) (sql.Result, error) {
+	executor, err := p.getExecutor(tx)
+	if err != nil {
+		return nil, err
+	}
+	return executor.Exec(sql, args...)
+}
+
+// QueryWithTx Run a raw sql with Tx and return some rows
+func (p *PostgreSQL) QueryWithTx(tx Tx, sql string, args ...any) (*sql.Rows, error) {
+	executor, err := p.getExecutor(tx)
+	if err != nil {
+		return nil, err
+	}
+	return executor.Query(sql, args...)
+}
+
+// QueryOneWithTx Run a raw sql with Tx and return a row
+func (p *PostgreSQL) QueryOneWithTx(tx Tx, sql string, args ...any) (*sql.Row, error) {
+	executor, err := p.getExecutor(tx)
+	if err != nil {
+		return nil, err
+	}
+	return executor.QueryRow(sql, args...), nil
+}
+
+// Exec Run a raw sql and return result
+func (p *PostgreSQL) Exec(sql string, args ...any) (sql.Result, error) {
+	return p.ExecWithTx(nil, sql, args...)
 }
 
 // Query Run a raw sql and return some rows
 func (p *PostgreSQL) Query(sql string, args ...any) (*sql.Rows, error) {
-	if err := p.Connect(); err != nil {
-		return nil, err
-	}
-	return p.db.Query(sql, args...)
+	return p.QueryWithTx(nil, sql, args...)
 }
 
 // QueryOne Run a raw sql and return a row
 func (p *PostgreSQL) QueryOne(sql string, args ...any) (*sql.Row, error) {
-	if err := p.Connect(); err != nil {
-		return nil, err
-	}
-	return p.db.QueryRow(sql, args...), nil
+	return p.QueryOneWithTx(nil, sql, args...)
 }
 
 // Transaction run transaction
@@ -128,6 +163,7 @@ func (p *PostgreSQL) Transaction(fn func(tx Tx) error) error {
 	if err := p.Connect(); err != nil {
 		return err
 	}
+
 	tx, err := p.db.Begin()
 	if err != nil {
 		return err
