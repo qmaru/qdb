@@ -18,14 +18,50 @@ type Connector interface {
 type SqliteBase struct {
 	FileName   string
 	DriverName string
+	OpenConns  int
+	IdleConns  int
+	db         *sql.DB
+}
+
+func (s *SqliteBase) defaultConns() {
+	if s.OpenConns == 0 {
+		s.OpenConns = 1
+	}
+
+	if s.IdleConns == 0 {
+		s.IdleConns = 1
+	}
+}
+
+func (s *SqliteBase) SetConns(openConns, idleConns int) {
+	s.OpenConns = openConns
+	s.IdleConns = idleConns
 }
 
 func (s *SqliteBase) Connect() (*sql.DB, error) {
+	if s.db != nil {
+		return s.db, nil
+	}
 	db, err := sql.Open(s.DriverName, s.FileName)
 	if err != nil {
 		return nil, err
 	}
+
+	s.defaultConns()
+	db.SetMaxOpenConns(s.OpenConns)
+	db.SetMaxIdleConns(s.IdleConns)
+
+	s.db = db
 	return db, nil
+}
+
+func (s *SqliteBase) Close() error {
+	if s.db != nil {
+		err := s.db.Close()
+		s.db = nil
+		return err
+	}
+	return nil
 }
 
 func (s *SqliteBase) Exec(query string, args ...any) (sql.Result, error) {
@@ -65,7 +101,6 @@ func Exec(c Connector, query string, args ...any) (sql.Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
 
 	return db.Exec(query, args...)
 }
@@ -75,7 +110,6 @@ func Query(c Connector, query string, args ...any) (*sql.Rows, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
 
 	return db.Query(query, args...)
 }
@@ -85,7 +119,6 @@ func QueryOne(c Connector, query string, args ...any) (*sql.Row, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
 
 	return db.QueryRow(query, args...), nil
 }
@@ -107,7 +140,6 @@ func Transaction(c Connector, fn func(tx Tx) error) error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -127,13 +159,21 @@ func CreateTable(c Connector, tables []any) error {
 	if err != nil {
 		return err
 	}
-	defer sdb.Close()
+
 	for _, table := range tables {
 		var buffer bytes.Buffer
 		rType := reflect.TypeOf(table)
+		if rType.Kind() == reflect.Ptr {
+			rType = rType.Elem()
+		}
+
 		rName := rdb.DBName(rType.Name())
 		rdb.DBFiled(rType, &buffer)
-		rFiled := buffer.Bytes()[0 : len(buffer.Bytes())-1]
+		b := buffer.Bytes()
+		if len(b) == 0 {
+			continue
+		}
+		rFiled := b[0 : len(b)-1]
 		sql := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s)", rName, rFiled)
 		_, err := sdb.Exec(sql)
 		if err != nil {
