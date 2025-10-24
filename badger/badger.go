@@ -91,7 +91,7 @@ func (b *BadgerDB) Update(fn func(txn *Txn) error) error {
 	return db.Update(fn)
 }
 
-func (b *BadgerDB) Begin(writable bool) (*gobadger.Txn, func() error, error) {
+func (b *BadgerDB) Begin(writable bool) (*Txn, func() error, error) {
 	db, err := b.Connect()
 	if err != nil {
 		return nil, nil, err

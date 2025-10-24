@@ -8,6 +8,7 @@ import (
 
 type LevelDB struct {
 	FileName string
+	db       *leveldb.DB
 }
 
 func New(filename string) *LevelDB {
@@ -18,11 +19,23 @@ func New(filename string) *LevelDB {
 
 // Connect create database
 func (ldb *LevelDB) Connect() (*leveldb.DB, error) {
+	if ldb.db != nil {
+		return ldb.db, nil
+	}
+
 	db, err := leveldb.OpenFile(ldb.FileName, nil)
 	if err != nil {
 		return nil, err
 	}
+	ldb.db = db
 	return db, nil
+}
+
+func (ldb *LevelDB) Close() error {
+	if ldb.db == nil {
+		return nil
+	}
+	return ldb.db.Close()
 }
 
 // Set create key-value
@@ -31,7 +44,7 @@ func (ldb *LevelDB) Set(key, value []byte) error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+
 	err = db.Put(key, value, nil)
 	if err != nil {
 		return err
@@ -45,7 +58,7 @@ func (ldb *LevelDB) Get(key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
+
 	value, err := db.Get(key, nil)
 	if err != nil {
 		return nil, err
@@ -59,20 +72,23 @@ func (ldb *LevelDB) GetBatch(keyPrefix string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
+
 	iter := db.NewIterator(util.BytesPrefix([]byte(keyPrefix)), nil)
+	defer iter.Release()
 
 	data := make(map[string]any)
 	for iter.Next() {
-		key := string(iter.Key())
-		data[key] = iter.Value()
+		k := string(iter.Key())
+		v := iter.Value()
+		vcopy := make([]byte, len(v))
+		copy(vcopy, v)
+		data[k] = vcopy
 	}
-	iter.Release()
-	err = iter.Error()
-	if err != nil {
+
+	if err := iter.Error(); err != nil {
 		return nil, err
 	}
-	return data, err
+	return data, nil
 }
 
 // Del delete a key
@@ -81,7 +97,7 @@ func (ldb *LevelDB) Del(key []byte) error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+
 	err = db.Delete(key, nil)
 	if err != nil {
 		return err
@@ -95,11 +111,12 @@ func (ldb *LevelDB) Check(key []byte) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer db.Close()
-	if ok, err := db.Has(key, nil); !ok {
+
+	ok, err := db.Has(key, nil)
+	if err != nil {
 		return false, err
 	}
-	return true, nil
+	return ok, nil
 }
 
 // Batch create a batch instance

@@ -2,14 +2,18 @@ package boltdb
 
 import (
 	"bytes"
-	"encoding/json"
+	"fmt"
+	"time"
 
 	bolt "go.etcd.io/bbolt"
 )
 
+type Tx = bolt.Tx
+
 type BoltDB struct {
 	FileName   string
 	BucketName string
+	db         *bolt.DB
 }
 
 func New(filename, bucketname string) *BoltDB {
@@ -21,110 +25,156 @@ func New(filename, bucketname string) *BoltDB {
 
 // Connect Open and create
 func (b *BoltDB) Connect() (*bolt.DB, error) {
-	db, err := bolt.Open(b.FileName, 0600, nil)
+	if b.db != nil {
+		return b.db, nil
+	}
+
+	if b.FileName == "" {
+		return nil, fmt.Errorf("filename is empty")
+	}
+
+	db, err := bolt.Open(b.FileName, 0600, &bolt.Options{Timeout: 3 * time.Second})
 	if err != nil {
 		return nil, err
 	}
-	return db, nil
+	b.db = db
+	return b.db, nil
+}
+
+func (b *BoltDB) Close() error {
+	if b.db == nil {
+		return nil
+	}
+	return b.db.Close()
 }
 
 // CreateBucket create a bucket
 func (b *BoltDB) CreateBucket() error {
+	if b.BucketName == "" {
+		return fmt.Errorf("bucket name is empty")
+	}
+
 	db, err := b.Connect()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
 
 	return db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists([]byte(b.BucketName))
-		if err != nil {
-			return err
-		}
-		return nil
+		return err
 	})
 }
 
-// GetBucket list buckets
-func (b *BoltDB) GetBucket() (map[string]string, error) {
+func (b *BoltDB) BucketExists() (bool, error) {
+	if b.BucketName == "" {
+		return false, fmt.Errorf("bucket name is empty")
+	}
+
+	db, err := b.Connect()
+	if err != nil {
+		return false, err
+	}
+
+	var exists bool
+	err = db.View(func(tx *bolt.Tx) error {
+		bt := tx.Bucket([]byte(b.BucketName))
+		exists = (bt != nil)
+		return nil
+	})
+	return exists, err
+}
+
+// ListBuckets list buckets
+func (b *BoltDB) ListBuckets() (map[string]string, error) {
+	if b.BucketName == "" {
+		return nil, fmt.Errorf("bucket name is empty")
+	}
+
 	db, err := b.Connect()
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
 
-	var data map[string]string
 	tmp := make(map[string]string)
 	err = db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(b.BucketName))
-		c := b.Cursor()
+		bucket := tx.Bucket([]byte(b.BucketName))
+		if bucket == nil {
+			return fmt.Errorf("bucket %s not found", b.BucketName)
+		}
+		c := bucket.Cursor()
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			tmp[string(k)] = string(v)
 		}
 		return nil
 	})
 
-	if err != nil {
-		return nil, err
-	}
-
-	jsonByte, err := json.Marshal(tmp)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(jsonByte, &data)
-	if err != nil {
-		return nil, err
-	}
-
-	return data, nil
+	return tmp, err
 }
 
 // Set create a key-value
 func (b *BoltDB) Set(key, value []byte) error {
+	if b.BucketName == "" {
+		return fmt.Errorf("bucket name is empty")
+	}
+
 	db, err := b.Connect()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
 
 	return db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(b.BucketName))
-		err := b.Put(key, value)
-		return err
+		bucket := tx.Bucket([]byte(b.BucketName))
+		if bucket == nil {
+			return fmt.Errorf("bucket %s not found", b.BucketName)
+		}
+		return bucket.Put(key, value)
 	})
 }
 
 // Get get value of key
 func (b *BoltDB) Get(key []byte) ([]byte, error) {
+	if b.BucketName == "" {
+		return nil, fmt.Errorf("bucket name is empty")
+	}
+
 	db, err := b.Connect()
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
 
 	var value []byte
 	err = db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(b.BucketName))
-		v := b.Get(key)
-		value = append(value, v...)
+		bucket := tx.Bucket([]byte(b.BucketName))
+		if bucket == nil {
+			return fmt.Errorf("bucket %s not found", b.BucketName)
+		}
+		v := bucket.Get(key)
+		if v != nil {
+			value = append(value, v...)
+		}
 		return nil
 	})
 	return value, err
 }
 
 // Scan get value of prefix or key
-func (b *BoltDB) Scan(prefix, key []byte) ([]byte, error) {
+func (b *BoltDB) Scan(prefix, key []byte) ([]map[string]string, error) {
+	if b.BucketName == "" {
+		return nil, fmt.Errorf("bucket name is empty")
+	}
+
 	db, err := b.Connect()
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
 
 	tmps := make([]map[string]string, 0)
 	err = db.View(func(tx *bolt.Tx) error {
-		c := tx.Bucket([]byte(b.BucketName)).Cursor()
+		bucket := tx.Bucket([]byte(b.BucketName))
+		if bucket == nil {
+			return fmt.Errorf("bucket %s not found", b.BucketName)
+		}
+		c := bucket.Cursor()
 		for k, v := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = c.Next() {
 			if bytes.HasSuffix(k, key) {
 				tmp := make(map[string]string)
@@ -135,24 +185,49 @@ func (b *BoltDB) Scan(prefix, key []byte) ([]byte, error) {
 		return nil
 	})
 
-	value, err := json.Marshal(tmps)
 	if err != nil {
 		return nil, err
 	}
-	return value, err
+
+	return tmps, nil
 }
 
 // Del delete a key
 func (b *BoltDB) Del(key []byte) error {
+	if b.BucketName == "" {
+		return fmt.Errorf("bucket name is empty")
+	}
+
 	db, err := b.Connect()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
 
 	return db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(b.BucketName))
-		err := b.Delete(key)
-		return err
+		bucket := tx.Bucket([]byte(b.BucketName))
+		if bucket == nil {
+			return fmt.Errorf("bucket %s not found", b.BucketName)
+		}
+		return bucket.Delete(key)
 	})
+}
+
+func (b *BoltDB) Begin(writeable bool) (*Tx, func() error, error) {
+	db, err := b.Connect()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	tx, err := db.Begin(writeable)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	commit := func() error {
+		if writeable {
+			return tx.Commit()
+		}
+		return tx.Rollback()
+	}
+	return tx, commit, nil
 }
