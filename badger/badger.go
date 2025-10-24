@@ -44,15 +44,13 @@ func (b *BadgerDB) Connect() (*gobadger.DB, error) {
 	if b.Options != nil {
 		opts = *b.Options
 	} else {
-		if b.memoryMode {
-			opts = gobadger.DefaultOptions("").WithInMemory(true)
-		} else {
-			opts = gobadger.DefaultOptions(b.FileName)
-		}
+		opts = gobadger.DefaultOptions(b.FileName)
 	}
 
 	if b.memoryMode {
 		opts = opts.WithInMemory(true)
+		opts.Dir = ""
+		opts.ValueDir = ""
 	}
 
 	if b.encryptionKey != nil {

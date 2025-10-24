@@ -13,14 +13,9 @@ import (
 
 func TestBadgerDB(t *testing.T) {
 	bdb := badger.New("qmaru", nil)
-	_, err := bdb.Connect()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	bdb.SetMemoryMode(true)
 
-	err = bdb.Update(func(txn *badger.Txn) error {
+	err := bdb.Update(func(txn *badger.Txn) error {
 		return txn.Set([]byte("qmaru"), []byte("best"))
 	})
 	if err != nil {
