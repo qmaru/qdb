@@ -231,3 +231,19 @@ func (b *BoltDB) Begin(writeable bool) (*Tx, func() error, error) {
 	}
 	return tx, commit, nil
 }
+
+func (b *BoltDB) View(fn func(*Tx) error) error {
+	db, err := b.Connect()
+	if err != nil {
+		return err
+	}
+	return db.View(fn)
+}
+
+func (b *BoltDB) Update(fn func(*Tx) error) error {
+	db, err := b.Connect()
+	if err != nil {
+		return err
+	}
+	return db.Update(fn)
+}

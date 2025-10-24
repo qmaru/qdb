@@ -5,7 +5,7 @@ import (
 )
 
 type Options = gobadger.Options
-
+type Logger = gobadger.Logger
 type Txn = gobadger.Txn
 
 type BadgerDB struct {
@@ -14,6 +14,7 @@ type BadgerDB struct {
 	memoryMode     bool
 	encryptionKey  []byte
 	indexCacheSize int64
+	logger         gobadger.Logger
 	db             *gobadger.DB
 }
 
@@ -22,6 +23,10 @@ func New(filename string, options *Options) *BadgerDB {
 		FileName: filename,
 		Options:  options,
 	}
+}
+
+func (b *BadgerDB) SetLogger(logger Logger) {
+	b.logger = logger
 }
 
 func (b *BadgerDB) SetMemoryMode(memoryMode bool) {
@@ -51,6 +56,7 @@ func (b *BadgerDB) Connect() (*gobadger.DB, error) {
 		opts = opts.WithInMemory(true)
 		opts.Dir = ""
 		opts.ValueDir = ""
+		opts = opts.WithLogger(b.logger)
 	}
 
 	if b.encryptionKey != nil {
