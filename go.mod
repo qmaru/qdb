@@ -6,7 +6,7 @@ require (
 	github.com/bits-and-blooms/bloom/v3 v3.7.1
 	github.com/dgraph-io/badger/v4 v4.8.0
 	github.com/glebarez/go-sqlite v1.22.0
-	github.com/hashicorp/golang-lru/v2 v2.0.7
+	github.com/karlseguin/ccache/v3 v3.0.6
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/redis/go-redis/v9 v9.16.0

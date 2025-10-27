@@ -6,24 +6,25 @@ import (
 	"time"
 
 	"github.com/bits-and-blooms/bloom/v3"
-	"github.com/hashicorp/golang-lru/v2"
-	"github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/karlseguin/ccache/v3"
 )
 
-type LRUBloom[K comparable, V any] struct {
-	LRUEnable         bool
-	BloomEnable       bool
-	lruCache          *lru.Cache[K, V]
-	lruCacheExpirable *expirable.LRU[K, V]
-	bloomCache        *bloom.BloomFilter
-	bloomN            uint
-	bloomFP           float64
-	bloomMu           sync.RWMutex
+type LRUBloom[K any] struct {
+	LRUEnable   bool
+	BloomEnable bool
+	lruCache    *ccache.Cache[K]
+	lruTTL      time.Duration
+	bloomCache  *bloom.BloomFilter
+	bloomN      uint
+	bloomFP     float64
+	bloomMu     sync.RWMutex
+	keys        map[string]struct{}
+	keysMu      sync.RWMutex
 }
 
 type LRUOptions struct {
 	Enable bool
-	Size   int
+	Size   int64
 	TTL    time.Duration
 }
 
@@ -40,11 +41,11 @@ const (
 	defaultLRUTTL  = 5 * time.Minute
 )
 
-func toBytes[K comparable](k K) []byte {
-	return []byte(fmt.Sprint(k))
+func toKeyString(key any) string {
+	return fmt.Sprint(key)
 }
 
-func NewDefault[K comparable, V any](enableTTL bool) (*LRUBloom[K, V], error) {
+func NewDefault[K any](enableTTL bool) (*LRUBloom[K], error) {
 	ttl := time.Duration(0)
 	if enableTTL {
 		ttl = defaultLRUTTL
@@ -60,10 +61,10 @@ func NewDefault[K comparable, V any](enableTTL bool) (*LRUBloom[K, V], error) {
 		N:      uint(defaultBloomN),
 		FP:     defaultBloomFP,
 	}
-	return New[K, V](lruOpt, bloomOpt)
+	return New[K](lruOpt, bloomOpt)
 }
 
-func NewDefaultLRU[K comparable, V any](enableTTL bool) (*LRUBloom[K, V], error) {
+func NewDefaultLRU[K any](enableTTL bool) (*LRUBloom[K], error) {
 	ttl := time.Duration(0)
 	if enableTTL {
 		ttl = defaultLRUTTL
@@ -77,10 +78,10 @@ func NewDefaultLRU[K comparable, V any](enableTTL bool) (*LRUBloom[K, V], error)
 	bloomOpt := BloomOptions{
 		Enable: false,
 	}
-	return New[K, V](lruOpt, bloomOpt)
+	return New[K](lruOpt, bloomOpt)
 }
 
-func NewDefaultBloom[K comparable, V any]() (*LRUBloom[K, V], error) {
+func NewDefaultBloom[K any]() (*LRUBloom[K], error) {
 	lruOpt := LRUOptions{
 		Enable: false,
 	}
@@ -89,36 +90,28 @@ func NewDefaultBloom[K comparable, V any]() (*LRUBloom[K, V], error) {
 		N:      uint(defaultBloomN),
 		FP:     defaultBloomFP,
 	}
-	return New[K, V](lruOpt, bloomOpt)
+	return New[K](lruOpt, bloomOpt)
 }
 
-func New[K comparable, V any](lruOpt LRUOptions, bloomOpt BloomOptions) (*LRUBloom[K, V], error) {
+func New[K any](lruOpt LRUOptions, bloomOpt BloomOptions) (*LRUBloom[K], error) {
 	if !lruOpt.Enable && !bloomOpt.Enable {
 		return nil, fmt.Errorf("either LRU or Bloom must be enabled")
 	}
 
-	var (
-		lruCache          *lru.Cache[K, V]
-		lruCacheExpirable *expirable.LRU[K, V]
-		bloomFilter       *bloom.BloomFilter
-		err               error
-	)
+	var cache *ccache.Cache[K]
+	var lruTTL time.Duration
 
 	if lruOpt.Enable {
 		if lruOpt.Size <= 0 {
 			lruOpt.Size = defaultLRUSize
 		}
 
-		if lruOpt.TTL > 0 {
-			lruCacheExpirable = expirable.NewLRU[K, V](lruOpt.Size, nil, lruOpt.TTL)
-		} else {
-			lruCache, err = lru.New[K, V](lruOpt.Size)
-			if err != nil {
-				return nil, err
-			}
-		}
+		cfg := ccache.Configure[K]().MaxSize(lruOpt.Size)
+		cache = ccache.New(cfg)
+		lruTTL = lruOpt.TTL
 	}
 
+	var bloomFilter *bloom.BloomFilter
 	var bn uint
 	var bfp float64
 	if bloomOpt.Enable {
@@ -128,24 +121,24 @@ func New[K comparable, V any](lruOpt LRUOptions, bloomOpt BloomOptions) (*LRUBlo
 		if bloomOpt.FP <= 0 {
 			bloomOpt.FP = defaultBloomFP
 		}
-
 		bn = bloomOpt.N
 		bfp = bloomOpt.FP
 		bloomFilter = bloom.NewWithEstimates(bn, bfp)
 	}
 
-	return &LRUBloom[K, V]{
-		LRUEnable:         lruOpt.Enable,
-		BloomEnable:       bloomOpt.Enable,
-		lruCache:          lruCache,
-		lruCacheExpirable: lruCacheExpirable,
-		bloomCache:        bloomFilter,
-		bloomN:            bn,
-		bloomFP:           bfp,
+	return &LRUBloom[K]{
+		LRUEnable:   lruOpt.Enable,
+		BloomEnable: bloomOpt.Enable,
+		lruCache:    cache,
+		lruTTL:      lruTTL,
+		bloomCache:  bloomFilter,
+		bloomN:      bn,
+		bloomFP:     bfp,
+		keys:        make(map[string]struct{}),
 	}, nil
 }
 
-func (c *LRUBloom[K, V]) ResetBloom() {
+func (c *LRUBloom[K]) ResetBloom() {
 	if !c.BloomEnable {
 		return
 	}
@@ -164,7 +157,7 @@ func (c *LRUBloom[K, V]) ResetBloom() {
 	c.bloomMu.Unlock()
 }
 
-func (c *LRUBloom[K, V]) RebuildBloomFromLRU() {
+func (c *LRUBloom[K]) RebuildBloomFromLRU() {
 	if !c.BloomEnable {
 		return
 	}
@@ -183,85 +176,114 @@ func (c *LRUBloom[K, V]) RebuildBloomFromLRU() {
 		return
 	}
 
-	if c.lruCacheExpirable != nil {
-		for _, k := range c.lruCacheExpirable.Keys() {
-			newBF.Add(toBytes(k))
-		}
-	} else if c.lruCache != nil {
-		for _, k := range c.lruCache.Keys() {
-			newBF.Add(toBytes(k))
-		}
+	c.keysMu.RLock()
+	keys := make([]string, 0, len(c.keys))
+	for k := range c.keys {
+		keys = append(keys, k)
 	}
+	c.keysMu.RUnlock()
+
+	var toDelete []string
+	for _, k := range keys {
+		if c.lruCache != nil {
+			item := c.lruCache.Get(k)
+			if item != nil && !item.Expired() {
+				newBF.Add([]byte(k))
+				continue
+			}
+		}
+		toDelete = append(toDelete, k)
+	}
+
+	if len(toDelete) > 0 {
+		c.keysMu.Lock()
+		for _, k := range toDelete {
+			delete(c.keys, k)
+		}
+		c.keysMu.Unlock()
+	}
+
+	c.keysMu.RLock()
+	for k := range c.keys {
+		newBF.Add([]byte(k))
+	}
+	c.keysMu.RUnlock()
 
 	c.bloomMu.Lock()
 	c.bloomCache = newBF
 	c.bloomMu.Unlock()
 }
 
-func (c *LRUBloom[K, V]) Set(key K, val V) {
-	if c.LRUEnable {
-		if c.lruCacheExpirable != nil {
-			c.lruCacheExpirable.Add(key, val)
-		} else if c.lruCache != nil {
-			c.lruCache.Add(key, val)
+func (c *LRUBloom[K]) Set(key any, val K, ttl ...time.Duration) {
+	keyStr := toKeyString(key)
+	if c.LRUEnable && c.lruCache != nil {
+		var useTTL time.Duration
+		if len(ttl) > 0 {
+			useTTL = ttl[0]
+		} else {
+			useTTL = c.lruTTL
 		}
+		c.lruCache.Set(keyStr, val, useTTL)
+		c.keysMu.Lock()
+		c.keys[keyStr] = struct{}{}
+		c.keysMu.Unlock()
 	}
 	if c.BloomEnable && c.bloomCache != nil {
-		c.bloomCache.Add(toBytes(key))
+		c.bloomMu.Lock()
+		c.bloomCache.Add([]byte(keyStr))
+		c.bloomMu.Unlock()
 	}
 }
 
-func (c *LRUBloom[K, V]) Get(key K) (V, bool) {
-	var zero V
+func (c *LRUBloom[K]) GetOrExist(key any) (value K, ok bool, probable bool) {
+	var zero K
+	keyStr := toKeyString(key)
+
+	if c.LRUEnable && c.lruCache != nil {
+		item := c.lruCache.Get(keyStr)
+		if item != nil && !item.Expired() {
+			return item.Value(), true, true
+		}
+	}
 
 	if c.BloomEnable && c.bloomCache != nil {
-		if !c.bloomCache.Test(toBytes(key)) {
-			return zero, false
-		}
+		c.bloomMu.RLock()
+		probable = c.bloomCache.Test([]byte(keyStr))
+		c.bloomMu.RUnlock()
 	}
 
-	if c.LRUEnable {
-		if c.lruCacheExpirable != nil {
-			if v, ok := c.lruCacheExpirable.Get(key); ok {
-				return v, true
-			}
-			return zero, false
-		}
-		if c.lruCache != nil {
-			if v, ok := c.lruCache.Get(key); ok {
-				return v, true
-			}
-			return zero, false
-		}
-	}
-
-	return zero, false
+	return zero, false, probable
 }
 
-func (c *LRUBloom[K, V]) Exists(key K) bool {
-	if c.LRUEnable {
-		if c.lruCacheExpirable != nil {
-			if _, ok := c.lruCacheExpirable.Get(key); ok {
-				return true
-			}
-		} else if c.lruCache != nil {
-			if _, ok := c.lruCache.Get(key); ok {
-				return true
-			}
-		}
+func (c *LRUBloom[K]) Delete(key any) {
+	keyStr := toKeyString(key)
+	if c.LRUEnable && c.lruCache != nil {
+		c.lruCache.Delete(keyStr)
 	}
-	if c.BloomEnable && c.bloomCache != nil {
-		return c.bloomCache.Test(toBytes(key))
+
+	c.keysMu.Lock()
+	delete(c.keys, keyStr)
+	c.keysMu.Unlock()
+}
+
+func (c *LRUBloom[K]) Clear() {
+	if c.LRUEnable && c.lruCache != nil {
+		c.lruCache.Clear()
 	}
-	return false
+	c.keysMu.Lock()
+	c.keys = make(map[string]struct{})
+	c.keysMu.Unlock()
+	if c.BloomEnable {
+		c.ResetBloom()
+	}
 }
 
 // LRUClient
-func (c *LRUBloom[K, V]) LRUClient() (*lru.Cache[K, V], *expirable.LRU[K, V]) {
-	return c.lruCache, c.lruCacheExpirable
+func (c *LRUBloom[K]) LRUClient() *ccache.Cache[K] {
+	return c.lruCache
 }
 
 // BloomClient
-func (c *LRUBloom[K, V]) BloomClient() *bloom.BloomFilter {
+func (c *LRUBloom[K]) BloomClient() *bloom.BloomFilter {
 	return c.bloomCache
 }

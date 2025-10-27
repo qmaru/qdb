@@ -280,7 +280,7 @@ func TestLRUBloom(t *testing.T) {
 			FP:     0.01,
 		}
 
-		lb, err := lrubloom.New[string, string](lruOpt, bloomOpt)
+		lb, err := lrubloom.New[string](lruOpt, bloomOpt)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -291,13 +291,8 @@ func TestLRUBloom(t *testing.T) {
 		lb.Set(key, val)
 
 		// Get should return the value (LRU stores the value)
-		if got, ok := lb.Get(key); !ok || got != val {
+		if got, ok, exist := lb.GetOrExist(key); !ok || got != val || !exist {
 			t.Fatalf("both: expected Get to return %q, ok=true; got=%q ok=%v", val, got, ok)
-		}
-
-		// Exists should be true (either LRU or Bloom)
-		if !lb.Exists(key) {
-			t.Fatal("both: expected Exists to be true")
 		}
 
 		// Bloom filter should report membership
@@ -314,7 +309,7 @@ func TestLRUBloom(t *testing.T) {
 		}
 		bloomOpt := lrubloom.BloomOptions{Enable: false}
 
-		lb, err := lrubloom.New[string, string](lruOpt, bloomOpt)
+		lb, err := lrubloom.New[string](lruOpt, bloomOpt)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -329,11 +324,8 @@ func TestLRUBloom(t *testing.T) {
 			t.Fatal("lru-only: expected BloomClient to be nil")
 		}
 
-		if got, ok := lb.Get(key); !ok || got != val {
+		if got, ok, exist := lb.GetOrExist(key); !ok || got != val || !exist {
 			t.Fatalf("lru-only: expected Get to return %q, ok=true; got=%q ok=%v", val, got, ok)
-		}
-		if !lb.Exists(key) {
-			t.Fatal("lru-only: expected Exists to be true")
 		}
 	})
 
@@ -345,7 +337,7 @@ func TestLRUBloom(t *testing.T) {
 			FP:     0.01,
 		}
 
-		lb, err := lrubloom.New[string, string](lruOpt, bloomOpt)
+		lb, err := lrubloom.New[string](lruOpt, bloomOpt)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -357,13 +349,8 @@ func TestLRUBloom(t *testing.T) {
 		lb.Set(key, val)
 
 		// Get cannot return actual value because LRU is disabled
-		if _, ok := lb.Get(key); ok {
+		if _, _, exist := lb.GetOrExist(key); exist {
 			t.Fatal("bloom-only: expected Get to return ok=false when LRU disabled")
-		}
-
-		// Exists should be true (Bloom may have false positives in general)
-		if !lb.Exists(key) {
-			t.Fatal("bloom-only: expected Exists to be true after Set")
 		}
 
 		// Bloom client should be present and report membership
@@ -380,7 +367,7 @@ func TestLRUBloom(t *testing.T) {
 		}
 		bloomOpt := lrubloom.BloomOptions{Enable: false}
 
-		lb, err := lrubloom.New[string, string](lruOpt, bloomOpt)
+		lb, err := lrubloom.New[string](lruOpt, bloomOpt)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -391,7 +378,7 @@ func TestLRUBloom(t *testing.T) {
 		lb.Set(key, val)
 
 		// immediate get should succeed
-		if got, ok := lb.Get(key); !ok || got != val {
+		if got, ok, exist := lb.GetOrExist(key); !ok || got != val || !exist {
 			t.Fatalf("ttl: expected immediate Get to return %q, ok=true; got=%q ok=%v", val, got, ok)
 		}
 
@@ -399,7 +386,7 @@ func TestLRUBloom(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 
 		// after TTL, item should be expired
-		if _, ok := lb.Get(key); ok {
+		if _, ok, exist := lb.GetOrExist(key); ok || exist {
 			t.Fatal("ttl: expected Get to return ok=false after TTL expiry")
 		}
 	})
