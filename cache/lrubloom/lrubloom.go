@@ -63,6 +63,35 @@ func NewDefault[K comparable, V any](enableTTL bool) (*LRUBloom[K, V], error) {
 	return New[K, V](lruOpt, bloomOpt)
 }
 
+func NewDefaultLRU[K comparable, V any](enableTTL bool) (*LRUBloom[K, V], error) {
+	ttl := time.Duration(0)
+	if enableTTL {
+		ttl = defaultLRUTTL
+	}
+
+	lruOpt := LRUOptions{
+		Enable: true,
+		Size:   defaultLRUSize,
+		TTL:    ttl,
+	}
+	bloomOpt := BloomOptions{
+		Enable: false,
+	}
+	return New[K, V](lruOpt, bloomOpt)
+}
+
+func NewDefaultBloom[K comparable, V any]() (*LRUBloom[K, V], error) {
+	lruOpt := LRUOptions{
+		Enable: false,
+	}
+	bloomOpt := BloomOptions{
+		Enable: true,
+		N:      uint(defaultBloomN),
+		FP:     defaultBloomFP,
+	}
+	return New[K, V](lruOpt, bloomOpt)
+}
+
 func New[K comparable, V any](lruOpt LRUOptions, bloomOpt BloomOptions) (*LRUBloom[K, V], error) {
 	if !lruOpt.Enable && !bloomOpt.Enable {
 		return nil, fmt.Errorf("either LRU or Bloom must be enabled")
