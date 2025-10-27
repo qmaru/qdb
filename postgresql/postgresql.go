@@ -33,7 +33,7 @@ type PostgreSQL struct {
 	Username string
 	Password string
 	DBName   string
-	Options  PostgreSQLOptions
+	Options  *PostgreSQLOptions
 	db       *sql.DB
 }
 
@@ -45,9 +45,10 @@ func NewPostgreSQLOptions() PostgreSQLOptions {
 	}
 }
 
-func New(host string, port int, username, password, dbname string, options PostgreSQLOptions) *PostgreSQL {
-	if options == (PostgreSQLOptions{}) {
-		options = NewPostgreSQLOptions()
+func New(host string, port int, username, password, dbname string, options *PostgreSQLOptions) *PostgreSQL {
+	if options == nil {
+		opts := NewPostgreSQLOptions()
+		options = &opts
 	}
 
 	return &PostgreSQL{
@@ -61,19 +62,25 @@ func New(host string, port int, username, password, dbname string, options Postg
 }
 
 func NewDefault(host string, port int, username, password, dbname string) *PostgreSQL {
+	opts := NewPostgreSQLOptions()
 	return &PostgreSQL{
 		Host:     host,
 		Port:     port,
 		Username: username,
 		Password: password,
 		DBName:   dbname,
-		Options:  NewPostgreSQLOptions(),
+		Options:  &opts,
 	}
 }
 
 // Connect connecting a database
 func (p *PostgreSQL) Connect() error {
 	if p.db == nil {
+		if p.Options == nil {
+			opts := NewPostgreSQLOptions()
+			p.Options = &opts
+		}
+
 		dbInfo := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable", p.Username, p.Password, p.Host, p.Port, p.DBName)
 		db, err := sql.Open("postgres", dbInfo)
 		if err != nil {
@@ -102,6 +109,12 @@ func (p *PostgreSQL) Close() {
 }
 
 func (p *PostgreSQL) Stats() sql.DBStats {
+	if p.db == nil {
+		_ = p.Connect()
+		if p.db == nil {
+			return sql.DBStats{}
+		}
+	}
 	return p.db.Stats()
 }
 
