@@ -15,6 +15,8 @@ type LRUBloom[K comparable, V any] struct {
 	lruCache          *lru.Cache[K, V]
 	lruCacheExpirable *expirable.LRU[K, V]
 	bloomCache        *bloom.BloomFilter
+	bloomN            uint
+	bloomFP           float64
 }
 
 type LRUOptions struct {
@@ -86,6 +88,8 @@ func New[K comparable, V any](lruOpt LRUOptions, bloomOpt BloomOptions) (*LRUBlo
 		}
 	}
 
+	var bn uint
+	var bfp float64
 	if bloomOpt.Enable {
 		if bloomOpt.N == 0 {
 			bloomOpt.N = defaultBloomN
@@ -94,7 +98,9 @@ func New[K comparable, V any](lruOpt LRUOptions, bloomOpt BloomOptions) (*LRUBlo
 			bloomOpt.FP = defaultBloomFP
 		}
 
-		bloomFilter = bloom.NewWithEstimates(bloomOpt.N, bloomOpt.FP)
+		bn = bloomOpt.N
+		bfp = bloomOpt.FP
+		bloomFilter = bloom.NewWithEstimates(bn, bfp)
 	}
 
 	return &LRUBloom[K, V]{
@@ -103,7 +109,45 @@ func New[K comparable, V any](lruOpt LRUOptions, bloomOpt BloomOptions) (*LRUBlo
 		lruCache:          lruCache,
 		lruCacheExpirable: lruCacheExpirable,
 		bloomCache:        bloomFilter,
+		bloomN:            bn,
+		bloomFP:           bfp,
 	}, nil
+}
+
+func (c *LRUBloom[K, V]) ResetBloom() {
+	if !c.BloomEnable {
+		return
+	}
+
+	n := c.bloomN
+	fp := c.bloomFP
+	if n == 0 {
+		n = defaultBloomN
+	}
+	if fp <= 0 {
+		fp = defaultBloomFP
+	}
+	c.bloomCache = bloom.NewWithEstimates(n, fp)
+}
+
+func (c *LRUBloom[K, V]) RebuildBloomFromLRU() {
+	if !c.BloomEnable {
+		return
+	}
+	c.ResetBloom()
+	if c.bloomCache == nil {
+		return
+	}
+
+	if c.lruCacheExpirable != nil {
+		for _, k := range c.lruCacheExpirable.Keys() {
+			c.bloomCache.Add(toBytes(k))
+		}
+	} else if c.lruCache != nil {
+		for _, k := range c.lruCache.Keys() {
+			c.bloomCache.Add(toBytes(k))
+		}
+	}
 }
 
 func (c *LRUBloom[K, V]) Set(key K, val V) {
