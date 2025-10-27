@@ -3,8 +3,10 @@ module github.com/qmaru/qdb
 go 1.24.0
 
 require (
+	github.com/bits-and-blooms/bloom/v3 v3.7.1
 	github.com/dgraph-io/badger/v4 v4.8.0
 	github.com/glebarez/go-sqlite v1.22.0
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/redis/go-redis/v9 v9.16.0
@@ -13,6 +15,7 @@ require (
 )
 
 require (
+	github.com/bits-and-blooms/bitset v1.24.2 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/dgraph-io/ristretto/v2 v2.3.0 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect

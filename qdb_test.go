@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/qmaru/qdb/badger"
 	"github.com/qmaru/qdb/boltdb"
+	"github.com/qmaru/qdb/cache/lrubloom"
 	"github.com/qmaru/qdb/cache/redis"
 	"github.com/qmaru/qdb/leveldb"
 	"github.com/qmaru/qdb/postgresql"
@@ -263,4 +265,142 @@ func TestRedis(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("redis get key:%s value:%v\n", key, result)
+}
+
+func TestLRUBloom(t *testing.T) {
+	t.Run("both-lru-and-bloom", func(t *testing.T) {
+		lruOpt := lrubloom.LRUOptions{
+			Enable: true,
+			Size:   500,
+			TTL:    10 * time.Minute,
+		}
+		bloomOpt := lrubloom.BloomOptions{
+			Enable: true,
+			N:      1000,
+			FP:     0.01,
+		}
+
+		lb, err := lrubloom.New[string, string](lruOpt, bloomOpt)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		key := "qmaru"
+		val := "best"
+
+		lb.Set(key, val)
+
+		// Get should return the value (LRU stores the value)
+		if got, ok := lb.Get(key); !ok || got != val {
+			t.Fatalf("both: expected Get to return %q, ok=true; got=%q ok=%v", val, got, ok)
+		}
+
+		// Exists should be true (either LRU or Bloom)
+		if !lb.Exists(key) {
+			t.Fatal("both: expected Exists to be true")
+		}
+
+		// Bloom filter should report membership
+		if bf := lb.BloomClient(); bf == nil || !bf.Test([]byte(key)) {
+			t.Fatal("both: expected bloom to contain key")
+		}
+	})
+
+	t.Run("lru-only", func(t *testing.T) {
+		lruOpt := lrubloom.LRUOptions{
+			Enable: true,
+			Size:   100,
+			TTL:    0,
+		}
+		bloomOpt := lrubloom.BloomOptions{Enable: false}
+
+		lb, err := lrubloom.New[string, string](lruOpt, bloomOpt)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		key := "lru-key"
+		val := "value-lru"
+
+		lb.Set(key, val)
+
+		// Bloom client should be nil when disabled
+		if lb.BloomClient() != nil {
+			t.Fatal("lru-only: expected BloomClient to be nil")
+		}
+
+		if got, ok := lb.Get(key); !ok || got != val {
+			t.Fatalf("lru-only: expected Get to return %q, ok=true; got=%q ok=%v", val, got, ok)
+		}
+		if !lb.Exists(key) {
+			t.Fatal("lru-only: expected Exists to be true")
+		}
+	})
+
+	t.Run("bloom-only", func(t *testing.T) {
+		lruOpt := lrubloom.LRUOptions{Enable: false}
+		bloomOpt := lrubloom.BloomOptions{
+			Enable: true,
+			N:      500,
+			FP:     0.01,
+		}
+
+		lb, err := lrubloom.New[string, string](lruOpt, bloomOpt)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		key := "bloom-key"
+		val := "value-bloom"
+
+		// Set will only add to bloom (no LRU storage)
+		lb.Set(key, val)
+
+		// Get cannot return actual value because LRU is disabled
+		if _, ok := lb.Get(key); ok {
+			t.Fatal("bloom-only: expected Get to return ok=false when LRU disabled")
+		}
+
+		// Exists should be true (Bloom may have false positives in general)
+		if !lb.Exists(key) {
+			t.Fatal("bloom-only: expected Exists to be true after Set")
+		}
+
+		// Bloom client should be present and report membership
+		if bf := lb.BloomClient(); bf == nil || !bf.Test([]byte(key)) {
+			t.Fatal("bloom-only: expected bloom to contain key")
+		}
+	})
+
+	t.Run("lru-ttl-expiry", func(t *testing.T) {
+		lruOpt := lrubloom.LRUOptions{
+			Enable: true,
+			Size:   50,
+			TTL:    150 * time.Millisecond,
+		}
+		bloomOpt := lrubloom.BloomOptions{Enable: false}
+
+		lb, err := lrubloom.New[string, string](lruOpt, bloomOpt)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		key := "ttl-key"
+		val := "ttl-val"
+
+		lb.Set(key, val)
+
+		// immediate get should succeed
+		if got, ok := lb.Get(key); !ok || got != val {
+			t.Fatalf("ttl: expected immediate Get to return %q, ok=true; got=%q ok=%v", val, got, ok)
+		}
+
+		// wait for expiry
+		time.Sleep(200 * time.Millisecond)
+
+		// after TTL, item should be expired
+		if _, ok := lb.Get(key); ok {
+			t.Fatal("ttl: expected Get to return ok=false after TTL expiry")
+		}
+	})
 }
