@@ -1,11 +1,13 @@
 package qdb
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
 	"github.com/qmaru/qdb/badger"
 	"github.com/qmaru/qdb/boltdb"
+	"github.com/qmaru/qdb/cache/redis"
 	"github.com/qmaru/qdb/leveldb"
 	"github.com/qmaru/qdb/postgresql"
 	"github.com/qmaru/qdb/sqlite"
@@ -237,4 +239,28 @@ func TestSqlitep(t *testing.T) {
 		}
 		t.Log(v)
 	})
+}
+
+func TestRedis(t *testing.T) {
+	ctx := context.Background()
+	rdb := redis.NewDefault(ctx, "127.0.0.1:6379", "", 0)
+	err := rdb.Ping()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rdb.Close()
+
+	key := "qdb:1"
+
+	err = rdb.SetJSON(key, map[string]string{"name": "qmaru"}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var result map[string]string
+	err = rdb.GetJSON(key, &result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("redis get key:%s value:%v\n", key, result)
 }

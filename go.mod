@@ -7,6 +7,7 @@ require (
 	github.com/glebarez/go-sqlite v1.22.0
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-sqlite3 v1.14.32
+	github.com/redis/go-redis/v9 v9.16.0
 	github.com/syndtr/goleveldb v1.0.0
 	go.etcd.io/bbolt v1.4.3
 )
@@ -14,6 +15,7 @@ require (
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/dgraph-io/ristretto/v2 v2.3.0 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
