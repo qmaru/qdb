@@ -2,6 +2,7 @@ package lrubloom
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/bits-and-blooms/bloom/v3"
@@ -17,6 +18,7 @@ type LRUBloom[K comparable, V any] struct {
 	bloomCache        *bloom.BloomFilter
 	bloomN            uint
 	bloomFP           float64
+	bloomMu           sync.RWMutex
 }
 
 type LRUOptions struct {
@@ -39,7 +41,7 @@ const (
 )
 
 func toBytes[K comparable](k K) []byte {
-	return fmt.Append(nil, k)
+	return []byte(fmt.Sprint(k))
 }
 
 func NewDefault[K comparable, V any](enableTTL bool) (*LRUBloom[K, V], error) {
@@ -120,34 +122,51 @@ func (c *LRUBloom[K, V]) ResetBloom() {
 	}
 
 	n := c.bloomN
-	fp := c.bloomFP
 	if n == 0 {
 		n = defaultBloomN
 	}
+	fp := c.bloomFP
 	if fp <= 0 {
 		fp = defaultBloomFP
 	}
+
+	c.bloomMu.Lock()
 	c.bloomCache = bloom.NewWithEstimates(n, fp)
+	c.bloomMu.Unlock()
 }
 
 func (c *LRUBloom[K, V]) RebuildBloomFromLRU() {
 	if !c.BloomEnable {
 		return
 	}
-	c.ResetBloom()
-	if c.bloomCache == nil {
+
+	n := c.bloomN
+	if n == 0 {
+		n = defaultBloomN
+	}
+	fp := c.bloomFP
+	if fp <= 0 {
+		fp = defaultBloomFP
+	}
+
+	newBF := bloom.NewWithEstimates(n, fp)
+	if newBF == nil {
 		return
 	}
 
 	if c.lruCacheExpirable != nil {
 		for _, k := range c.lruCacheExpirable.Keys() {
-			c.bloomCache.Add(toBytes(k))
+			newBF.Add(toBytes(k))
 		}
 	} else if c.lruCache != nil {
 		for _, k := range c.lruCache.Keys() {
-			c.bloomCache.Add(toBytes(k))
+			newBF.Add(toBytes(k))
 		}
 	}
+
+	c.bloomMu.Lock()
+	c.bloomCache = newBF
+	c.bloomMu.Unlock()
 }
 
 func (c *LRUBloom[K, V]) Set(key K, val V) {
