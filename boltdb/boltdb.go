@@ -3,6 +3,7 @@ package boltdb
 import (
 	"bytes"
 	"fmt"
+	"sync"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
@@ -13,7 +14,9 @@ type Tx = bolt.Tx
 type BoltDB struct {
 	FileName   string
 	BucketName string
+	once       sync.Once
 	db         *bolt.DB
+	err        error
 }
 
 func New(filename, bucketname string) *BoltDB {
@@ -25,20 +28,18 @@ func New(filename, bucketname string) *BoltDB {
 
 // Connect Open and create
 func (b *BoltDB) Connect() (*bolt.DB, error) {
-	if b.db != nil {
-		return b.db, nil
-	}
-
-	if b.FileName == "" {
-		return nil, fmt.Errorf("filename is empty")
-	}
-
-	db, err := bolt.Open(b.FileName, 0600, &bolt.Options{Timeout: 3 * time.Second})
-	if err != nil {
-		return nil, err
-	}
-	b.db = db
-	return b.db, nil
+	b.once.Do(func() {
+		if b.FileName == "" {
+			b.err = fmt.Errorf("filename is empty")
+			return
+		}
+		b.db, b.err = bolt.Open(
+			b.FileName,
+			0600,
+			&bolt.Options{Timeout: 3 * time.Second},
+		)
+	})
+	return b.db, b.err
 }
 
 func (b *BoltDB) Close() error {

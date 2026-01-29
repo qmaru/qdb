@@ -1,6 +1,8 @@
 package leveldb
 
 import (
+	"sync"
+
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -8,7 +10,9 @@ import (
 
 type LevelDB struct {
 	FileName string
+	once     sync.Once
 	db       *leveldb.DB
+	err      error
 }
 
 func New(filename string) *LevelDB {
@@ -19,16 +23,10 @@ func New(filename string) *LevelDB {
 
 // Connect create database
 func (ldb *LevelDB) Connect() (*leveldb.DB, error) {
-	if ldb.db != nil {
-		return ldb.db, nil
-	}
-
-	db, err := leveldb.OpenFile(ldb.FileName, nil)
-	if err != nil {
-		return nil, err
-	}
-	ldb.db = db
-	return db, nil
+	ldb.once.Do(func() {
+		ldb.db, ldb.err = leveldb.OpenFile(ldb.FileName, nil)
+	})
+	return ldb.db, ldb.err
 }
 
 func (ldb *LevelDB) Close() error {

@@ -1,6 +1,8 @@
 package badger
 
 import (
+	"sync"
+
 	gobadger "github.com/dgraph-io/badger/v4"
 )
 
@@ -15,7 +17,9 @@ type BadgerDB struct {
 	encryptionKey  []byte
 	indexCacheSize int64
 	logger         gobadger.Logger
+	once           sync.Once
 	db             *gobadger.DB
+	err            error
 }
 
 func New(filename string, options *Options) *BadgerDB {
@@ -40,38 +44,32 @@ func (b *BadgerDB) SetEncryption(key []byte, cacheSize int64) {
 
 // Connect Open and create
 func (b *BadgerDB) Connect() (*gobadger.DB, error) {
-	if b.db != nil {
-		return b.db, nil
-	}
-
-	var opts gobadger.Options
-
-	if b.Options != nil {
-		opts = *b.Options
-	} else {
-		opts = gobadger.DefaultOptions(b.FileName)
-	}
-
-	if b.memoryMode {
-		opts = opts.WithInMemory(true)
-		opts.Dir = ""
-		opts.ValueDir = ""
-		opts = opts.WithLogger(b.logger)
-	}
-
-	if b.encryptionKey != nil {
-		opts = opts.WithEncryptionKey(b.encryptionKey)
-		if b.indexCacheSize > 0 {
-			opts = opts.WithIndexCacheSize(b.indexCacheSize)
+	b.once.Do(func() {
+		var opts gobadger.Options
+		if b.Options != nil {
+			opts = *b.Options
+		} else {
+			opts = gobadger.DefaultOptions(b.FileName)
 		}
-	}
 
-	db, err := gobadger.Open(opts)
-	if err != nil {
-		return nil, err
-	}
-	b.db = db
-	return db, nil
+		if b.memoryMode {
+			opts = opts.WithInMemory(true)
+			opts.Dir = ""
+			opts.ValueDir = ""
+			opts = opts.WithLogger(b.logger)
+		}
+
+		if b.encryptionKey != nil {
+			opts = opts.WithEncryptionKey(b.encryptionKey)
+			if b.indexCacheSize > 0 {
+				opts = opts.WithIndexCacheSize(b.indexCacheSize)
+			}
+		}
+
+		b.db, b.err = gobadger.Open(opts)
+	})
+
+	return b.db, b.err
 }
 
 func (b *BadgerDB) Close() error {

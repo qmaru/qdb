@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"sync"
 
 	"github.com/qmaru/qdb/rdb"
 )
@@ -20,7 +21,9 @@ type SqliteBase struct {
 	DriverName string
 	OpenConns  int
 	IdleConns  int
+	once       sync.Once
 	db         *sql.DB
+	err        error
 }
 
 func (s *SqliteBase) defaultConns() {
@@ -39,20 +42,20 @@ func (s *SqliteBase) SetConns(openConns, idleConns int) {
 }
 
 func (s *SqliteBase) Connect() (*sql.DB, error) {
-	if s.db != nil {
-		return s.db, nil
-	}
-	db, err := sql.Open(s.DriverName, s.FileName)
-	if err != nil {
-		return nil, err
-	}
+	s.once.Do(func() {
+		db, err := sql.Open(s.DriverName, s.FileName)
+		if err != nil {
+			s.err = err
+			return
+		}
 
-	s.defaultConns()
-	db.SetMaxOpenConns(s.OpenConns)
-	db.SetMaxIdleConns(s.IdleConns)
+		s.defaultConns()
+		db.SetMaxOpenConns(s.OpenConns)
+		db.SetMaxIdleConns(s.IdleConns)
 
-	s.db = db
-	return db, nil
+		s.db = db
+	})
+	return s.db, s.err
 }
 
 func (s *SqliteBase) Close() error {

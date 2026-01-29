@@ -43,10 +43,6 @@ func NewMemory() *Buntdb {
 }
 
 func (b *Buntdb) Connect() (*gobuntdb.DB, error) {
-	if b.db != nil {
-		return b.db, nil
-	}
-
 	b.once.Do(func() {
 		if b.FileName == "" {
 			b.err = fmt.Errorf("file mode requires a non-empty filename")
