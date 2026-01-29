@@ -8,6 +8,7 @@ import (
 
 	"github.com/qmaru/qdb/badger"
 	"github.com/qmaru/qdb/boltdb"
+	"github.com/qmaru/qdb/buntdb"
 	"github.com/qmaru/qdb/cache/lrubloom"
 	"github.com/qmaru/qdb/cache/redis"
 	"github.com/qmaru/qdb/leveldb"
@@ -120,6 +121,36 @@ func TestBoltDB(t *testing.T) {
 			return
 		}
 		t.Logf("boltdb list buckets count:%d\n", len(results))
+	})
+}
+
+func TestBuntDB(t *testing.T) {
+	db := buntdb.NewMemory()
+
+	err := db.Update(func(tx *buntdb.Tx) error {
+		_, _, err := tx.Set("qmaru", "best", &buntdb.SetOptions{
+			Expires: true,
+			TTL:     time.Duration(30 * time.Second),
+		})
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("buntdb set key:%s value:%s\n", "qmaru", "best")
+
+	runConcurrentReaders(t, 10, func(t *testing.T) {
+		err := db.View(func(tx *buntdb.Tx) error {
+			val, err := tx.Get("qmaru")
+			if err != nil {
+				return err
+			}
+			t.Logf("buntdb get key:%s value:%s\n", "qmaru", val)
+			return nil
+		})
+		if err != nil {
+			t.Error(err)
+		}
 	})
 }
 
