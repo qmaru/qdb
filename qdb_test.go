@@ -58,27 +58,34 @@ func TestBadgerDB(t *testing.T) {
 }
 
 func TestBoltDB(t *testing.T) {
-	bucket := "qmaru"
+	bucketName := "qmaru"
 	key := "qmaru"
 	keyTx := "qmaru_tx"
 
-	db := boltdb.New("qmaru.db", bucket)
-	if err := db.CreateBucket(); err != nil {
+	db := boltdb.New("qmaru.db")
+	t.Cleanup(func() {
+		db.Close()
+	})
+
+	bucket := db.Bucket(bucketName)
+	if err := bucket.Create(); err != nil {
 		t.Fatalf("boltdb create bucket error: %v", err)
 	}
 
-	if ok, err := db.BucketExists(); err != nil {
-		t.Fatalf("boltdb bucket %s does not exist", bucket)
-	} else if !ok {
-		t.Fatalf("boltdb bucket %s does not exist", bucket)
+	ok, err := bucket.Exists()
+	if err != nil {
+		t.Fatalf("bucket exists check failed: %v", err)
+	}
+	if !ok {
+		t.Fatalf("bucket %s does not exist", bucketName)
 	}
 
-	if err := db.Set([]byte(key), []byte("best")); err != nil {
+	if err := bucket.Set([]byte(key), []byte("best")); err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("boltdb set key:%s value:%s\n", key, "best")
 
-	val, err := db.Get([]byte(key))
+	val, err := bucket.Get([]byte(key))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,9 +95,9 @@ func TestBoltDB(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b := tx.Bucket([]byte(bucket))
+	b := tx.Bucket([]byte(bucketName))
 	if b == nil {
-		t.Fatalf("bucket %s does not exist", bucket)
+		t.Fatalf("bucket %s does not exist", bucketName)
 	}
 	if err := b.Put([]byte(keyTx), []byte("better")); err != nil {
 		t.Fatal(err)
@@ -101,26 +108,29 @@ func TestBoltDB(t *testing.T) {
 	t.Logf("boltdb transaction set key:%s value:%s\n", keyTx, "better")
 
 	runConcurrentReaders(t, 10, func(t *testing.T) {
-		val, err := db.Get([]byte(key))
+		val, err := bucket.Get([]byte(key))
 		if err != nil {
 			t.Error(err)
 			return
 		}
 		t.Logf("boltdb get key:%s value:%s\n", key, val)
 
-		val2, err := db.Get([]byte(keyTx))
+		val2, err := bucket.Get([]byte(keyTx))
 		if err != nil {
 			t.Error(err)
 			return
 		}
 		t.Logf("boltdb get key:%s value:%s\n", keyTx, val2)
 
-		results, err := db.ListBuckets()
+		results, err := bucket.ListKeyValues()
 		if err != nil {
 			t.Error(err)
 			return
 		}
-		t.Logf("boltdb list buckets count:%d\n", len(results))
+		if len(results) != 2 {
+			t.Fatalf("unexpected key count: %d", len(results))
+		}
+		t.Logf("boltdb list keys count:%d\n", len(results))
 	})
 }
 
