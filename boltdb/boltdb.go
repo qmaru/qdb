@@ -13,6 +13,7 @@ type Tx = bolt.Tx
 
 type BoltDB struct {
 	FileName string
+	Timeout  time.Duration
 	db       *bolt.DB
 	once     sync.Once
 	err      error
@@ -23,10 +24,20 @@ type Bucket struct {
 	name string
 }
 
+// Default timeout value (15 seconds)
+const DefaultTimeout = 15 * time.Second
+
 func New(filename string) *BoltDB {
 	return &BoltDB{
 		FileName: filename,
+		Timeout:  DefaultTimeout,
 	}
+}
+
+// SetTimeout sets the connection timeout (should be called before Connect)
+func (b *BoltDB) SetTimeout(timeout time.Duration) *BoltDB {
+	b.Timeout = timeout
+	return b
 }
 
 // Connect open database
@@ -39,7 +50,7 @@ func (b *BoltDB) Connect() (*bolt.DB, error) {
 		b.db, b.err = bolt.Open(
 			b.FileName,
 			0600,
-			&bolt.Options{Timeout: 3 * time.Second},
+			&bolt.Options{Timeout: b.Timeout},
 		)
 	})
 	return b.db, b.err
