@@ -6,6 +6,7 @@ require (
 	github.com/bits-and-blooms/bloom/v3 v3.7.1
 	github.com/dgraph-io/badger/v4 v4.9.0
 	github.com/glebarez/go-sqlite v1.22.0
+	github.com/go-sql-driver/mysql v1.9.3
 	github.com/karlseguin/ccache/v3 v3.0.8
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-sqlite3 v1.14.33
@@ -16,6 +17,7 @@ require (
 )
 
 require (
+	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/bits-and-blooms/bitset v1.24.4 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/dgraph-io/ristretto/v2 v2.4.0 // indirect
