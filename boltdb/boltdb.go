@@ -115,6 +115,24 @@ func (b *BoltDB) Update(fn func(*Tx) error) error {
 	return db.Update(fn)
 }
 
+func (b *BoltDB) ListBuckets() ([]string, error) {
+	var result []string
+
+	db, err := b.Connect()
+	if err != nil {
+		return nil, err
+	}
+
+	err = db.View(func(tx *bolt.Tx) error {
+		return tx.ForEach(func(name []byte, _ *bolt.Bucket) error {
+			result = append(result, string(name))
+			return nil
+		})
+	})
+
+	return result, err
+}
+
 // Create creates bucket if not exists
 func (b *Bucket) Create() error {
 	if len(b.name) == 0 {
