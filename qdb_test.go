@@ -80,10 +80,10 @@ func TestBoltDB(t *testing.T) {
 		t.Fatalf("bucket %s does not exist", bucketName)
 	}
 
-	if err := bucket.Set([]byte(key), []byte("best")); err != nil {
+	if err := bucket.Put([]byte(key), []byte("best")); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("boltdb set key:%s value:%s\n", key, "best")
+	t.Logf("boltdb put key:%s value:%s\n", key, "best")
 
 	val, err := bucket.Get([]byte(key))
 	if err != nil {

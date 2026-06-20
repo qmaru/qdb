@@ -180,16 +180,16 @@ func (b *Bucket) Update(fn func(*TxBucket) error) error {
 	})
 }
 
-// Set stores key-value
-func (b *Bucket) Set(key, value []byte) error {
+// Put stores key-value
+func (b *Bucket) Put(key, value []byte) error {
 	return b.Update(func(tx *TxBucket) error {
-		return tx.Set(key, value)
+		return tx.Put(key, value)
 	})
 }
 
-// SetString helper
-func (b *Bucket) SetString(key, value string) error {
-	return b.Set([]byte(key), []byte(value))
+// PutString helper
+func (b *Bucket) PutString(key, value string) error {
+	return b.Put([]byte(key), []byte(value))
 }
 
 // Get returns value
@@ -219,9 +219,9 @@ func (b *Bucket) ExistsKey(key []byte) (bool, error) {
 }
 
 // Delete key
-func (b *Bucket) Del(key []byte) error {
+func (b *Bucket) Delete(key []byte) error {
 	return b.Update(func(tx *TxBucket) error {
-		return tx.Del(key)
+		return tx.Delete(key)
 	})
 }
 
@@ -247,7 +247,7 @@ func (b *Bucket) DeletePrefix(prefix []byte) error {
 		for k, _ := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); {
 			key := bytes.Clone(k)
 			k, _ = c.Next()
-			if err := tx.Del(key); err != nil {
+			if err := tx.Delete(key); err != nil {
 				return err
 			}
 		}
@@ -276,11 +276,11 @@ func (b *TxBucket) Get(key []byte) []byte {
 	return bytes.Clone(v)
 }
 
-func (b *TxBucket) Set(key, value []byte) error {
+func (b *TxBucket) Put(key, value []byte) error {
 	return b.bucket.Put(key, value)
 }
 
-func (b *TxBucket) Del(key []byte) error {
+func (b *TxBucket) Delete(key []byte) error {
 	return b.bucket.Delete(key)
 }
 
